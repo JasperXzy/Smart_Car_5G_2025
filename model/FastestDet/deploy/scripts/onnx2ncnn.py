@@ -55,7 +55,7 @@ class ONNX2NCNNConverter:
         
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            print("Basic conversion completed successfully!")
+            print("Basic conversion completed successfully!\n")
             
             if result.stdout:
                 print("STDOUT:", result.stdout)
@@ -72,28 +72,35 @@ class ONNX2NCNNConverter:
     
     def optimize_model(self, fp16=True, int8=False):
         """Optimize the converted NCNN model"""
-        print("\nOptimizing NCNN model...")
+        print("Optimizing NCNN model...")
         
         optimized_param = self.output_dir / f"{self.model_name}_opt.param"
         optimized_bin = self.output_dir / f"{self.model_name}_opt.bin"
         
-        cmd = ['ncnnoptimize']
-        
-        # Add optimization flags
-        if fp16:
-            cmd.extend(['-fp16'])
-            print("  - Enabling FP16 optimization")
-        
-        if int8:
-            cmd.extend(['-int8'])
+        # ncnnoptimize usage: [inparam] [inbin] [outparam] [outbin] [flag] [cutstart] [cutend]
+        # flag: 0=fp32, 1=fp16, 2=int8, 65536=no optimization
+        flag = 0  # default fp32
+        if fp16 and int8:
+            flag = 2  # int8 has priority
             print("  - Enabling INT8 quantization")
+        elif fp16:
+            flag = 1  # fp16
+            print("  - Enabling FP16 optimization")
+        elif int8:
+            flag = 2  # int8
+            print("  - Enabling INT8 quantization")
+        else:
+            flag = 0  # fp32
+            print("  - Using FP32 (no optimization)")
         
-        cmd.extend([
+        cmd = [
+            'ncnnoptimize',
             str(self.param_path),
             str(self.bin_path),
             str(optimized_param),
-            str(optimized_bin)
-        ])
+            str(optimized_bin),
+            str(flag)
+        ]
         
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)

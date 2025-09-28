@@ -31,11 +31,14 @@ python3 ./onnx2ncnn.py ../models/FastestDet.onnx
 # 使用自定义输出目录进行转换
 python3 ./onnx2ncnn.py ../models/FastestDet.onnx --output ../models
 
-# 带优化的转换
-python3 ./onnx2ncnn.py ../models/FastestDet.onnx --fp16 --optimize
+# 带 FP16 优化的转换
+python3 ./onnx2ncnn.py ../models/FastestDet.onnx --output ../models --fp16
 
-# 不带优化的转换
-python3 ./onnx2ncnn.py ../models/FastestDet.onnx --no-optimize
+# 带 INT8 量化的转换
+python3 ./onnx2ncnn.py ../models/FastestDet.onnx --output ../models --int8
+
+# 不带任何优化的转换
+python3 ./onnx2ncnn.py ../models/FastestDet.onnx --output ../models --no-optimize
 
 # 获取帮助
 python3 ./onnx2ncnn.py --help
@@ -45,17 +48,17 @@ python3 ./onnx2ncnn.py --help
 
 脚本支持以下选项：
 
-- `--output` - 转换模型的输出目录（默认：./ncnn_models）
-- `--fp16` - 启用 FP16 优化（默认：启用）
-- `--int8` - 启用 INT8 量化（实验性功能）
+- `--output` / `-o` - 转换模型的输出目录（默认：./ncnn_models）
+- `--fp16` - 启用 FP16 优化（可减少模型大小约 50%）
+- `--int8` - 启用 INT8 量化（实验性功能，最大压缩比）
 - `--optimize` - 启用模型优化（默认：启用）
-- `--no-optimize` - 禁用模型优化
-- `--verbose` - 启用详细输出
+- `--no-optimize` - 禁用所有模型优化
+- `--verbose` / `-v` - 启用详细输出
 
 ### 输出结构
 
 ```
-ncnn_models/
-├── FastestDet.param    # 模型结构定义
+ncnn_models/（或指定的输出目录）
+├── FastestDet.param    # 模型结构定义文件
 └── FastestDet.bin      # 模型权重二进制文件
 ```
