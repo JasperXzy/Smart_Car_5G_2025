@@ -1,0 +1,11 @@
+numpy
+onnx
+onnxruntime
+onnxsim
+opencv_python
+pycocotools
+PyYAML
+torch
+torchsummary
+torchvision
+tqdm
