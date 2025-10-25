@@ -424,3 +424,14 @@ third_party/
 config.ini
 secrets.yaml
 .env.local
+
+*.jpg
+*.png
+*.jpeg
+*.bmp
+*.tiff
+*.gif
+*.mp4
+*.avi
+*.mov
+*.mkv
