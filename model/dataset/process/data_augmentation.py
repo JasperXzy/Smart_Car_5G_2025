@@ -99,7 +99,7 @@ def augment_images_from_directory(input_dir, output_dir, use_uuid=True, keep_aug
             print(f"  已处理 {i+1} 张原始图片，生成 {total_augmented} 张增广图片")
     
     # 保存增广日志
-    log_file = os.path.join(output_dir, 'augmentation_log.txt')
+    log_file = os.path.join(output_dir, 'augmentation.log')
     with open(log_file, 'w', encoding='utf-8') as f:
         f.write(f"数据增广日志\n")
         f.write(f"处理时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
