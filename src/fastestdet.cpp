@@ -179,6 +179,10 @@ void FastestDet::generate_proposals(const ncnn::Mat& out,
             const float* pobj_ptr = out.channel(0);
             float obj_score = pobj_ptr[base_idx];
             
+            // 提前退出
+            if (obj_score < prob_threshold_)
+                continue;
+            
             // 从通道1-4获取边界框回归值
             const float* preg_ptr0 = out.channel(1);
             const float* preg_ptr1 = out.channel(2);
