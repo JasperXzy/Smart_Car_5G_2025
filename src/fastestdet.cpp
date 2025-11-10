@@ -35,9 +35,49 @@ FastestDet::FastestDet(const std::string& param_path,
     , class_names_(class_names)
     , initialized_(false)
 {
-    // 设置NCNN选项
+    // 设置NCNN基础选项
     net_.opt.use_vulkan_compute = use_gpu;
     net_.opt.num_threads = num_threads;
+    
+    // 根据平台架构启用不同的优化选项
+#if defined(__ARM_NEON) || defined(__aarch64__)
+    // ARM平台优化
+    #ifdef __APPLE__
+        // Apple Silicon
+        std::cout << "Detected Apple Silicon, enabling conservative optimizations..." << std::endl;
+        net_.opt.use_winograd_convolution = false;     // 小模型不需要
+        net_.opt.use_sgemm_convolution = true;         // SGEMM优化
+        net_.opt.use_packing_layout = true;            // 布局优化
+        net_.opt.use_fp16_packed = false;              // Apple Silicon不需要
+        net_.opt.use_fp16_storage = false;             // 保持FP32避免转换开销
+    #else
+        // 嵌入式ARM平台
+        std::cout << "Detected embedded ARM, enabling full ARM optimizations..." << std::endl;
+        net_.opt.use_winograd_convolution = true;      // Winograd卷积优化
+        net_.opt.use_sgemm_convolution = true;         // SGEMM优化
+        net_.opt.use_packing_layout = true;            // 布局优化
+        net_.opt.use_fp16_packed = true;               // ARM NEON FP16
+        net_.opt.use_fp16_storage = true;              // FP16存储
+    #endif
+    net_.opt.use_int8_inference = false;               // int8推理
+    net_.opt.use_fp16_arithmetic = false;              // 保持精度
+    net_.opt.use_bf16_storage = false;                 // BF16存储
+#else
+    // x86/x64平台优化
+    std::cout << "Detected x86/x64 platform, enabling x86 optimizations..." << std::endl;
+    net_.opt.use_winograd_convolution = false;         // 小模型不需要
+    net_.opt.use_sgemm_convolution = true;             // SGEMM优化
+    net_.opt.use_int8_inference = false;               // int8推理
+    net_.opt.use_packing_layout = true;                // 布局优化
+    net_.opt.use_fp16_packed = false;                  // x86不支持
+    net_.opt.use_fp16_storage = false;                 // 保持FP32
+    net_.opt.use_fp16_arithmetic = false;              // 保持精度
+    net_.opt.use_bf16_storage = false;                 // BF16存储
+#endif
+    
+    // 内存池优化
+    net_.opt.blob_allocator = nullptr;                 // 使用默认分配器
+    net_.opt.workspace_allocator = nullptr;            // 使用默认工作区分配器
 
     // 加载模型参数
     if (net_.load_param(param_path.c_str()) != 0)
@@ -59,6 +99,19 @@ FastestDet::FastestDet(const std::string& param_path,
     std::cout << "  Classes: " << num_classes_ << std::endl;
     std::cout << "  Threads: " << num_threads << std::endl;
     std::cout << "  GPU: " << (use_gpu ? "Enabled" : "Disabled") << std::endl;
+
+#if defined(__ARM_NEON) || defined(__aarch64__)
+    #ifdef __APPLE__
+        std::cout << "  Platform: Apple Silicon" << std::endl;
+    #else
+        std::cout << "  Platform: ARM" << std::endl;
+    #endif
+#else
+    std::cout << "  Platform: x86/x64" << std::endl;
+#endif
+    std::cout << "  Optimizations: Winograd=" << net_.opt.use_winograd_convolution
+              << " SGEMM=" << net_.opt.use_sgemm_convolution
+              << " FP16=" << net_.opt.use_fp16_storage << std::endl;
 }
 
 // 析构函数
