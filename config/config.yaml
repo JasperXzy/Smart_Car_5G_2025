@@ -1,0 +1,232 @@
+# ==================== 硬件配置 ====================
+hardware:
+  # 舵机配置
+  servo:
+    pin: 12
+    pwm_range: 10000.0
+    frequency: 50.0
+    mid_value: 690.0      # 中值（直行）
+    min_value: 580.0      # 最小值（最大左转）
+    max_value: 1000.0     # 最大值（最大右转）
+  
+  # 电机配置
+  motor:
+    pin: 13
+    pwm_range: 40000.0
+    frequency: 200.0
+    base_speed: 11400.0   # 基础速度
+  
+  # 云台配置
+  yuntai:
+    lr_pin: 22
+    ud_pin: 23
+    lr_pwm_range: 1000.0
+    ud_pwm_range: 1000.0
+    lr_frequency: 50.0
+    ud_frequency: 50.0
+    lr_mid_value: 66.0
+    ud_mid_value: 70.0
+
+# ==================== 摄像头配置 ====================
+camera:
+  device_id: 0
+  width: 1280
+  height: 720
+  fps: 30
+  fourcc: "MJPG"
+  
+  # 畸变校正参数
+  calibration:
+    k1: 0.0439656098483248
+    k2: -0.0420991522460257
+    k3: 0.0
+    p1: 0.0
+    p2: 0.0
+    fx: 176.842468665091
+    fy: 176.990910857055
+    cx: 159.705914860981
+    cy: 120.557953465790
+
+# ==================== AI 模型配置 ====================
+models:
+  # 障碍物检测模型
+  obstacle:
+    param_path: "models/obs.param"
+    bin_path: "models/obs.bin"
+    num_classes: 1
+    labels: ["zhuitong"]
+    input_size: 352
+    prob_threshold: 0.6
+    nms_threshold: 0.4
+    num_threads: 4
+    use_gpu: false
+  
+  # 方向检测模型
+  direction:
+    param_path: "models/lr.param"
+    bin_path: "models/lr.bin"
+    num_classes: 2
+    labels: ["left", "right"]
+    input_size: 352
+    prob_threshold: 0.5
+    nms_threshold: 0.5
+    num_threads: 4
+    use_gpu: false
+  
+  # 停车标识检测模型
+  parking:
+    param_path: "models/ab.param"
+    bin_path: "models/ab.bin"
+    num_classes: 2
+    labels: ["A", "B"]
+    input_size: 352
+    prob_threshold: 0.5
+    nms_threshold: 0.5
+    num_threads: 4
+    use_gpu: false
+
+# ==================== 巡线参数 ====================
+line_tracking:
+  # PID 参数（普通巡线）
+  pid_normal:
+    kp: 1.0
+    kd: 2.0
+    ki: 0.0
+  
+  # PID 参数（弯道巡线）
+  pid_curve:
+    kp: 1.0
+    kd: 2.0
+    ki: 0.0
+  
+  # 速度控制
+  speed:
+    straight: 5000        # 直道速度增量
+    curve: 1400           # 弯道速度增量
+    start: 1500           # 起步速度增量
+  
+  # 巡线参数
+  curve_frame_threshold: 550    # 进入弯道的帧数阈值
+  search_start_x: 160           # 巡线搜索起点 x 坐标
+  search_row_start: 153         # 巡线搜索起始行
+  search_row_end: 110           # 巡线搜索结束行
+
+# ==================== 避障参数 ====================
+obstacle_avoidance:
+  # 检测参数
+  height_threshold: 170         # 障碍物高度阈值（y2 < 此值才算有效）
+  min_detection_frames: 10      # 最小检测帧数
+  max_obstacle_count: 3         # 最大避障次数
+  
+  # PID参数（避障）
+  pid_obstacle:
+    kp: 3.0
+    kd: 3.0
+    ki: 0.0
+  
+  # PID参数（避障等待）
+  pid_obstacle_wait:
+    kp: 1.5
+    kd: 3.0
+    ki: 0.0
+  
+  # 速度控制
+  speed: 1300                   # 避障速度增量
+  
+  # 补线参数
+  bypass_line_width: 8          # 绕行线宽度
+
+# ==================== 斑马线检测参数 ====================
+zebra_crossing:
+  # 检测参数
+  enable_frame: 620             # 开始检测的帧数
+  min_stripe_count: 4           # 最少条纹数量
+  
+  # ROI 区域
+  roi_x: 2
+  roi_y: 110
+  roi_width: 316
+  roi_height: 200
+  
+  # 条纹尺寸范围
+  stripe_min_width: 10
+  stripe_max_width: 50
+  stripe_min_height: 10
+  stripe_max_height: 50
+  
+  # HSV颜色范围（白色）
+  hsv_lower: [0, 0, 200]
+  hsv_upper: [180, 30, 255]
+
+# ==================== 变道参数 ====================
+lane_change:
+  # 左转参数
+  left:
+    servo_angle_1: 825
+    servo_angle_2: 610
+    motor_speed: 1300
+    duration_1: 1200000      # us
+    duration_2: 800000       # us
+  
+  # 右转参数
+  right:
+    servo_angle_1: 620
+    servo_angle_2: 820
+    motor_speed: 1300
+    duration_1: 1400000      # us
+    duration_2: 500000       # us
+
+# ==================== 停车参数 ====================
+parking:
+  # 检测参数
+  search_enable_frame: 30       # 开始搜索车库的帧数
+  min_detection_frames: 5       # 最少检测帧数
+  
+  # 红色检测 HSV 范围
+  red_hsv_lower_1: [0, 43, 46]
+  red_hsv_upper_1: [10, 255, 255]
+  red_hsv_lower_2: [156, 43, 46]
+  red_hsv_upper_2: [180, 255, 255]
+  
+  # ROI 区域
+  roi_y_min: 100
+  roi_y_max: 218
+  min_area: 1000
+  
+  # PID参数（停车对齐）
+  pid_parking:
+    kp: 3.0
+    kd: 3.0
+    ki: 0.0
+  
+  # 速度控制
+  speed_approach: 1700          # 接近速度
+  speed_align: 1200             # 对齐速度
+  speed_enter: 650              # 进库速度
+
+# ==================== 蓝色挡板检测参数 ====================
+blue_card:
+  # HSV 颜色范围
+  hsv_lower: [100, 43, 46]
+  hsv_upper: [124, 255, 255]
+  
+  # 检测区域
+  center_y_min: 90
+  center_y_max: 160
+  
+  # 面积阈值
+  min_area: 500
+
+# ==================== 其他参数 ====================
+misc:
+  # 音频播放命令
+  audio_command: "sudo -u pi /home/pi/.nvm/versions/node/v12.22.12/bin/node /home/pi/network-rc/we2hdu.js"
+  
+  # 日志级别 (DEBUG, INFO, WARNING, ERROR)
+  log_level: "INFO"
+  
+  # 是否启用调试显示
+  enable_debug_display: false
+  
+  # FPS 显示
+  show_fps: true
