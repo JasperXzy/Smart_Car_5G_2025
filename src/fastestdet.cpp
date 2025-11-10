@@ -2,6 +2,21 @@
 #include <float.h>
 #include <cmath>
 #include <algorithm>
+#include <chrono>
+
+// 性能计时宏
+#ifdef ENABLE_PERF_TIMING
+    #define PERF_TIMER_START(name) auto timer_start_##name = std::chrono::high_resolution_clock::now()
+    #define PERF_TIMER_END(name) \
+        do { \
+            auto timer_end_##name = std::chrono::high_resolution_clock::now(); \
+            auto duration_##name = std::chrono::duration_cast<std::chrono::microseconds>(timer_end_##name - timer_start_##name).count(); \
+            std::cout << "[PERF] " << #name << ": " << duration_##name / 1000.0 << " ms" << std::endl; \
+        } while(0)
+#else
+    #define PERF_TIMER_START(name)
+    #define PERF_TIMER_END(name)
+#endif
 
 // 构造函数
 FastestDet::FastestDet(const std::string& param_path,
@@ -146,6 +161,7 @@ void FastestDet::generate_proposals(const ncnn::Mat& out,
                                     int img_h,
                                     std::vector<DetectObject>& objects)
 {
+    PERF_TIMER_START(decode_bbox);
     const int channels = out.c;
     const int height = out.h;
     const int width = out.w;
@@ -229,11 +245,17 @@ void FastestDet::generate_proposals(const ncnn::Mat& out,
             objects.push_back(obj);
         }
     }
+    PERF_TIMER_END(decode_bbox);
+    
+#ifdef ENABLE_PERF_TIMING
+    std::cout << "[PERF]   - Proposals found: " << objects.size() << std::endl;
+#endif
 }
 
 // 对单帧图像进行目标检测
 std::vector<DetectObject> FastestDet::detect(const cv::Mat& frame)
 {
+    PERF_TIMER_START(total);
     std::vector<DetectObject> objects;
 
     if (!initialized_)
@@ -252,6 +274,7 @@ std::vector<DetectObject> FastestDet::detect(const cv::Mat& frame)
     int img_h = frame.rows;
 
     // 图像预处理
+    PERF_TIMER_START(preprocess);
     ncnn::Mat in = ncnn::Mat::from_pixels_resize(frame.data, 
                                                   ncnn::Mat::PIXEL_BGR,
                                                   img_w, img_h, 
@@ -260,6 +283,7 @@ std::vector<DetectObject> FastestDet::detect(const cv::Mat& frame)
     // 归一化到 [0, 1]
     const float norm_vals[3] = {1.0f / 255.0f, 1.0f / 255.0f, 1.0f / 255.0f};
     in.substract_mean_normalize(0, norm_vals);
+    PERF_TIMER_END(preprocess);
 
     // 创建提取器
     ncnn::Extractor ex = net_.create_extractor();
@@ -268,31 +292,42 @@ std::vector<DetectObject> FastestDet::detect(const cv::Mat& frame)
     ex.input("in0", in);
 
     // 执行推理
+    PERF_TIMER_START(inference);
     ncnn::Mat out;
     ex.extract("out0", out);
+    PERF_TIMER_END(inference);
 
     // 生成候选框
+    PERF_TIMER_START(generate_proposals);
     std::vector<DetectObject> proposals;
     generate_proposals(out, img_w, img_h, proposals);
+    PERF_TIMER_END(generate_proposals);
 
     // 按置信度排序
+    PERF_TIMER_START(sort);
     if (!proposals.empty())
     {
         qsort_descent_inplace(proposals, 0, proposals.size() - 1);
     }
+    PERF_TIMER_END(sort);
 
     // 应用NMS
+    PERF_TIMER_START(nms);
     std::vector<int> picked;
     nms_sorted_bboxes(proposals, picked);
+    PERF_TIMER_END(nms);
 
     // 输出结果
+    PERF_TIMER_START(copy_results);
     int count = picked.size();
     objects.resize(count);
     for (int i = 0; i < count; i++)
     {
         objects[i] = proposals[picked[i]];
     }
+    PERF_TIMER_END(copy_results);
 
+    PERF_TIMER_END(total);
     return objects;
 }
 

@@ -5,6 +5,15 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_BUILD_TYPE Release)
 
+# 性能计时开关
+option(ENABLE_PERF_TIMING "Enable performance timing output" OFF)
+if(ENABLE_PERF_TIMING)
+    add_definitions(-DENABLE_PERF_TIMING)
+    message(STATUS "Performance timing: ENABLED")
+else()
+    message(STATUS "Performance timing: DISABLED")
+endif()
+
 # macOS OpenMP支持
 if(APPLE)
     set(OpenMP_C_FLAGS "-Xpreprocessor -fopenmp")
