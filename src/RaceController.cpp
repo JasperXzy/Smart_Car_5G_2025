@@ -216,13 +216,9 @@ void RaceController::stateWaitStart(cv::Mat& frame) {
 void RaceController::stateLineFollow(cv::Mat& frame) {
     auto& config = Config::getInstance();
     
-    // 图像转灰度
-    cv::Mat gray;
-    cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-    
-    // 边缘检测生成图
-    cv::Mat binary;
-    cv::threshold(gray, binary, 128, 255, cv::THRESH_BINARY);
+    // Sobel 边缘检测
+    cv::Mat debug_overlay;
+    cv::Mat binary = image_proc_.imageSobel(frame, &debug_overlay);
     
     // 逐行精细追踪
     bool track_ok = image_proc_.tracking(binary, 153, 110);
@@ -309,10 +305,8 @@ void RaceController::stateObstacleAvoid(cv::Mat& frame) {
         std::cout << "[RaceController] Obstacle detected - CenterX: " << obs_center_x 
                   << ", TopY: " << obs_top_y << ", BottomY: " << obs_bottom_y << std::endl;
         
-        // 图像预处理
-        cv::Mat gray, binary;
-        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-        cv::threshold(gray, binary, 128, 255, cv::THRESH_BINARY);
+        // Sobel 边缘检测
+        cv::Mat binary = image_proc_.imageSobel(frame, nullptr);
         
         // 根据障碍物位置绘制连接线
         cv::Mat binary_with_line = binary.clone();

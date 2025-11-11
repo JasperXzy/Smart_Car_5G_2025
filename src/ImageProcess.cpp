@@ -36,20 +36,140 @@ bool ImageProcess::init(int width, int height) {
     return true;
 }
 
-void ImageProcess::sobelEdge(const cv::Mat& src, cv::Mat& dst, int ksize) {
-    cv::Mat grad_x, grad_y;
-    cv::Mat abs_grad_x, abs_grad_y;
+// Sobel 边缘检测与车道线提取
+cv::Mat ImageProcess::imageSobel(const cv::Mat& frame, cv::Mat* debug_overlay) {
+    // 图像尺寸调整到 320x240
+    const cv::Size target_size(320, 240);
+    cv::Mat resized_frame;
+    if (frame.size() != target_size) {
+        cv::resize(frame, resized_frame, target_size);
+    } else {
+        resized_frame = frame.clone();
+    }
     
-    // Sobel X 方向
-    cv::Sobel(src, grad_x, CV_16S, 1, 0, ksize);
-    cv::convertScaleAbs(grad_x, abs_grad_x);
+    // 定义巡线 ROI 区域 (x=1, y=109, width=318, height=46)
+    const cv::Rect roi_rect(1, 109, 318, 46);
+    cv::Mat roi = resized_frame(roi_rect);
     
-    // Sobel Y方向
-    cv::Sobel(src, grad_y, CV_16S, 0, 1, ksize);
-    cv::convertScaleAbs(grad_y, abs_grad_y);
+    // ROI 灰度化
+    cv::Mat gray_roi;
+    cv::cvtColor(roi, gray_roi, cv::COLOR_BGR2GRAY);
     
-    // 合并
-    cv::addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst);
+    // 均值滤波降噪 (5x5)
+    int kernel_size = 5;
+    cv::Mat blurred_roi;
+    cv::blur(gray_roi, blurred_roi, cv::Size(kernel_size, kernel_size));
+    
+    // Sobel 梯度检测
+    cv::Mat sobel_x, sobel_y;
+    cv::Sobel(blurred_roi, sobel_x, CV_64F, 1, 0, 3);  // X 方向梯度
+    cv::Sobel(blurred_roi, sobel_y, CV_64F, 0, 1, 3);  // Y 方向梯度
+    
+    // 组合梯度，更偏向纵向 (Y 方向权重更大)
+    cv::Mat gradient_magnitude = cv::abs(sobel_y) + 0.5 * cv::abs(sobel_x);
+    cv::Mat gradient_magnitude_8u;
+    cv::convertScaleAbs(gradient_magnitude, gradient_magnitude_8u);
+    
+    // HSV 空间提取亮度信息（V 通道）
+    cv::Mat hsv_roi;
+    cv::cvtColor(roi, hsv_roi, cv::COLOR_BGR2HSV);
+    cv::Mat v_channel;
+    cv::extractChannel(hsv_roi, v_channel, 2);  // 提取 V 通道
+    
+    // CLAHE 自适应直方图均衡增强亮度对比
+    cv::Mat clahe_output;
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(4, 4));
+    clahe->apply(v_channel, clahe_output);
+    cv::GaussianBlur(clahe_output, clahe_output, cv::Size(5, 5), 0);  // 平滑提升稳定性
+    
+    // 自适应阈值提取亮线
+    cv::Mat adaptive_mask;
+    cv::adaptiveThreshold(clahe_output, adaptive_mask, 255,
+                         cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY,
+                         31, -10);
+    
+    // 梯度二值掩码
+    cv::Mat gradient_mask;
+    cv::threshold(gradient_magnitude_8u, gradient_mask, 30, 255, cv::THRESH_BINARY);
+    cv::Mat gradient_kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+    cv::dilate(gradient_mask, gradient_mask, gradient_kernel);
+    
+    // 亮度 + 梯度联合约束
+    cv::Mat binary_mask;
+    cv::bitwise_and(adaptive_mask, gradient_mask, binary_mask);
+    
+    // 中值滤波去椒盐噪声
+    cv::medianBlur(binary_mask, binary_mask, 3);
+    
+    // 小结构开运算去噪
+    cv::Mat noise_kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(1, 1));
+    cv::morphologyEx(binary_mask, binary_mask, cv::MORPH_OPEN, noise_kernel);
+    
+    // 闭运算连接断裂 + 膨胀加粗车道线
+    cv::Mat morph_image = binary_mask.clone();
+    cv::Mat kernel_close = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(9, 5));
+    cv::morphologyEx(morph_image, morph_image, cv::MORPH_CLOSE, kernel_close);
+    
+    cv::Mat kernel_dilate = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+    cv::dilate(morph_image, morph_image, kernel_dilate, cv::Point(-1, -1), 1);
+    
+    // 连通域分析过滤小面积区域
+    cv::Mat labels, stats, centroids;
+    int num_labels = cv::connectedComponentsWithStats(morph_image, labels, stats, 
+                                                       centroids, 8, CV_32S);
+    cv::Mat filtered_morph = cv::Mat::zeros(morph_image.size(), CV_8U);
+    for (int i = 1; i < num_labels; ++i) {
+        if (stats.at<int>(i, cv::CC_STAT_AREA) >= MIN_COMPONENT_AREA) {
+            filtered_morph.setTo(255, labels == i);
+        }
+    }
+    morph_image = filtered_morph;
+    
+    // 霍夫直线检测
+    std::vector<cv::Vec4i> lines;
+    cv::HoughLinesP(morph_image, lines, 1, CV_PI / 180, 20, 15, 8);
+    
+    // 绘制最终车道线图像
+    cv::Mat final_image = cv::Mat::zeros(target_size, CV_8U);
+    cv::Mat overlay_image;
+    
+    if (debug_overlay) {
+        overlay_image = resized_frame.clone();
+        cv::rectangle(overlay_image, roi_rect, cv::Scalar(0, 255, 0), 1);
+    }
+    
+    // 只保留角度 > 15° 且长度 > 8 的直线
+    for (const auto& l : lines) {
+        double angle = std::atan2(l[3] - l[1], l[2] - l[0]) * 180.0 / CV_PI;
+        double length = std::hypot(l[3] - l[1], l[2] - l[0]);
+        
+        if (std::abs(angle) > 15 && length > 8) {
+            // 调整坐标到完整图像坐标系
+            cv::Vec4i adjusted_line = l;
+            adjusted_line[0] += roi_rect.x;
+            adjusted_line[1] += roi_rect.y;
+            adjusted_line[2] += roi_rect.x;
+            adjusted_line[3] += roi_rect.y;
+            
+            cv::line(final_image,
+                    cv::Point(adjusted_line[0], adjusted_line[1]),
+                    cv::Point(adjusted_line[2], adjusted_line[3]),
+                    cv::Scalar(255), 3, cv::LINE_AA);
+            
+            if (debug_overlay) {
+                cv::line(overlay_image,
+                        cv::Point(adjusted_line[0], adjusted_line[1]),
+                        cv::Point(adjusted_line[2], adjusted_line[3]),
+                        cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+            }
+        }
+    }
+    
+    if (debug_overlay) {
+        *debug_overlay = overlay_image;
+    }
+    
+    return final_image;
 }
 
 // 逐行巡线追踪

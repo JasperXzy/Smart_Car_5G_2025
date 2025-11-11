@@ -27,12 +27,12 @@ public:
     bool init(int width, int height);
     
     /**
-     * @brief Sobel 边缘检测
-     * @param src 源图像
-     * @param dst 输出图像
-     * @param ksize Sobel 核大小
+     * @brief Sobel 边缘检测与车道线提取
+     * @param frame 源图像
+     * @param debug_overlay 调试覆盖图
+     * @return 二值化的车道线图像
      */
-    void sobelEdge(const cv::Mat& src, cv::Mat& dst, int ksize = 3);
+    cv::Mat imageSobel(const cv::Mat& frame, cv::Mat* debug_overlay = nullptr);
     
     /**
      * @brief 逐行巡线追踪
@@ -162,6 +162,9 @@ private:
     std::vector<cv::Point> left_line_;      // 左边界点集
     std::vector<cv::Point> right_line_;     // 右边界点集
     std::vector<cv::Point> last_mid_line_;  // 上一帧中线
+    
+    // ImageSobel 相关常量
+    static constexpr int MIN_COMPONENT_AREA = 400;  // 连通域最小面积
 };
 
 } // namespace smartcar
