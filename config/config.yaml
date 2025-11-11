@@ -56,7 +56,7 @@ models:
     num_classes: 1
     labels: ["zhuitong"]
     input_size: 352
-    prob_threshold: 0.6
+    conf_threshold: 0.6
     nms_threshold: 0.4
     num_threads: 4
     use_gpu: false
@@ -68,7 +68,7 @@ models:
     num_classes: 2
     labels: ["left", "right"]
     input_size: 352
-    prob_threshold: 0.5
+    conf_threshold: 0.5
     nms_threshold: 0.5
     num_threads: 4
     use_gpu: false
@@ -80,7 +80,7 @@ models:
     num_classes: 2
     labels: ["A", "B"]
     input_size: 352
-    prob_threshold: 0.5
+    conf_threshold: 0.5
     nms_threshold: 0.5
     num_threads: 4
     use_gpu: false
@@ -117,6 +117,7 @@ obstacle_avoidance:
   height_threshold: 170         # 障碍物高度阈值（y2 < 此值才算有效）
   min_detection_frames: 10      # 最小检测帧数
   max_obstacle_count: 3         # 最大避障次数
+  turn_angle_base: 100.0        # 转向角度基准
   
   # PID参数（避障）
   pid_obstacle:
@@ -131,7 +132,7 @@ obstacle_avoidance:
     ki: 0.0
   
   # 速度控制
-  speed: 1300                   # 避障速度增量
+  avoid_speed: 1300             # 避障速度
   
   # 补线参数
   bypass_line_width: 8          # 绕行线宽度
@@ -141,6 +142,8 @@ zebra_crossing:
   # 检测参数
   enable_frame: 620             # 开始检测的帧数
   min_stripe_count: 4           # 最少条纹数量
+  detect_threshold: 4           # 检测阈值
+  stop_duration_ms: 3000        # 停车持续时间（ms）
   
   # ROI 区域
   roi_x: 2
@@ -160,27 +163,19 @@ zebra_crossing:
 
 # ==================== 变道参数 ====================
 lane_change:
-  # 左转参数
-  left:
-    servo_angle_1: 825
-    servo_angle_2: 610
-    motor_speed: 1300
-    duration_1: 1200000      # us
-    duration_2: 800000       # us
-  
-  # 右转参数
-  right:
-    servo_angle_1: 620
-    servo_angle_2: 820
-    motor_speed: 1300
-    duration_1: 1400000      # us
-    duration_2: 500000       # us
+  turn_angle_left: 825.0        # 左转角度
+  turn_angle_right: 620.0       # 右转角度
+  turn_duration_ms: 1200        # 转向持续时间（ms）
+  change_speed: 1300            # 变道速度
 
 # ==================== 停车参数 ====================
 parking:
   # 检测参数
   search_enable_frame: 30       # 开始搜索车库的帧数
   min_detection_frames: 5       # 最少检测帧数
+  detect_threshold: 5           # 检测阈值
+  approach_speed: 1700          # 接近速度
+  entry_angle: 90.0             # 进库角度
   
   # 红色检测 HSV 范围
   red_hsv_lower_1: [0, 43, 46]
@@ -207,8 +202,13 @@ parking:
 # ==================== 蓝色挡板检测参数 ====================
 blue_card:
   # HSV 颜色范围
-  hsv_lower: [100, 43, 46]
-  hsv_upper: [124, 255, 255]
+  hsv_range:
+    h_min: 100
+    h_max: 124
+    s_min: 43
+    s_max: 255
+    v_min: 46
+    v_max: 255
   
   # 检测区域
   center_y_min: 90
@@ -224,9 +224,12 @@ misc:
   
   # 日志级别 (DEBUG, INFO, WARNING, ERROR)
   log_level: "INFO"
-  
-  # 是否启用调试显示
-  enable_debug_display: false
+
+  # 调试模式
+  debug_mode: false        
+
+  # 是否启用显示
+  enable_display: false         
   
   # FPS 显示
   show_fps: true
