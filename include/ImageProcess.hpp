@@ -35,13 +35,59 @@ public:
     void sobelEdge(const cv::Mat& src, cv::Mat& dst, int ksize = 3);
     
     /**
-     * @brief 查找黑线中心
-     * @param gray 灰度图像
-     * @param search_y 搜索行号
-     * @param search_start_x 搜索起始 X
-     * @return 黑线中心 X 坐标，-1表示未找到
+     * @brief 逐行巡线追踪
+     * @param binary_image 二值化图像（白色为车道线）
+     * @param start_row 起始行号
+     * @param end_row 结束行号
+     * @return true=成功, false=失败
      */
-    int findLineCenter(const cv::Mat& gray, int search_y, int search_start_x);
+    bool tracking(const cv::Mat& binary_image, int start_row = 153, int end_row = 110);
+    
+    /**
+     * @brief 避障模式的巡线追踪
+     * @param binary_image 二值化图像
+     * @param obstacle_top_y 障碍物顶部 Y 坐标
+     * @return true=成功, false=失败
+     */
+    bool trackingObstacle(const cv::Mat& binary_image, int obstacle_top_y);
+    
+    /**
+     * @brief 获取中线点集
+     * @return 中线点集合
+     */
+    const std::vector<cv::Point>& getMidLine() const { return mid_line_; }
+    
+    /**
+     * @brief 获取左边界点集
+     * @return 左边界点集合
+     */
+    const std::vector<cv::Point>& getLeftLine() const { return left_line_; }
+    
+    /**
+     * @brief 获取右边界点集
+     * @return 右边界点集合
+     */
+    const std::vector<cv::Point>& getRightLine() const { return right_line_; }
+    
+    /**
+     * @brief 获取巡线中心点
+     * @param sample_count 采样点数
+     * @return 中心点 X 坐标，-1表示无效
+     */
+    int getTrackingCenter(int sample_count = 3) const;
+    
+    /**
+     * @brief 在二值图上补线
+     * @param binary_image 二值图
+     * @param start 起点
+     * @param end 终点
+     * @param line_width 线宽
+     * @return 补线后的图像
+     */
+    cv::Mat drawWhiteLine(const cv::Mat& binary_image, 
+                         const cv::Point& start, 
+                         const cv::Point& end, 
+                         int line_width = 8);
     
     /**
      * @brief 斑马线检测
@@ -81,12 +127,14 @@ public:
     void gaussianBlur(const cv::Mat& src, cv::Mat& dst, int kernel_size = 5);
     
     /**
-     * @brief 绘制检测结果
+     * @brief 绘制巡线追踪结果
      * @param img 图像
-     * @param center_x 中心点 X 坐标
-     * @param search_y 搜索行 Y 坐标
+     * @param draw_mid 是否绘制中线
+     * @param draw_left 是否绘制左线
+     * @param draw_right 是否绘制右线
      */
-    void drawLineCenter(cv::Mat& img, int center_x, int search_y);
+    void drawTrackingLines(cv::Mat& img, bool draw_mid = true, 
+                          bool draw_left = true, bool draw_right = true);
     
     /**
      * @brief 图像去畸变
@@ -108,6 +156,12 @@ private:
     cv::Mat temp_gray_;
     cv::Mat temp_binary_;
     cv::Mat temp_edges_;
+    
+    // 巡线数据
+    std::vector<cv::Point> mid_line_;       // 中线点集
+    std::vector<cv::Point> left_line_;      // 左边界点集
+    std::vector<cv::Point> right_line_;     // 右边界点集
+    std::vector<cv::Point> last_mid_line_;  // 上一帧中线
 };
 
 } // namespace smartcar

@@ -138,13 +138,17 @@ void Navigation::lineFollowing(int line_center, int image_width, int speed) {
     
     // 计算误差
     int target_center = image_width / 2;
-    float error = static_cast<float>(line_center - target_center);
+    float error = static_cast<float>(target_center - line_center);
+    
+    std::cout << "[Navigation] Line center: " << line_center 
+              << ", Target: " << target_center 
+              << ", Error: " << error << std::endl;
     
     // PID计算
     float control = pid_normal_.compute(error);
     
     // 转换为舵机角度
-    float servo_value = servo_mid_ - control;
+    float servo_value = servo_mid_ + control;
     
     // 限制范围
     if (servo_value < servo_min_) servo_value = servo_min_;
@@ -168,7 +172,11 @@ void Navigation::obstacleAvoidance(const cv::Rect& obstacle_box, int image_width
     int target_center = image_width / 2;
     
     // 计算误差
-    float error = static_cast<float>(obstacle_center - target_center);
+    float error = static_cast<float>(target_center - obstacle_center);
+    
+    std::cout << "[Navigation] Obstacle avoid - Obstacle center: " << obstacle_center 
+              << ", Target: " << target_center 
+              << ", Error: " << error << std::endl;
     
     // PID 计算
     float control = pid_obstacle_.compute(error);
@@ -176,11 +184,13 @@ void Navigation::obstacleAvoidance(const cv::Rect& obstacle_box, int image_width
     // 根据障碍物位置决定避让方向
     float servo_value;
     if (obstacle_center < target_center) {
-        // 障碍物在左边，向右转
+        // 障碍物在左边
         servo_value = servo_mid_ + config.obstacle_avoidance.turn_angle_base;
+        std::cout << "[Navigation] Obstacle on left, turn right" << std::endl;
     } else {
-        // 障碍物在右边，向左转
+        // 障碍物在右边
         servo_value = servo_mid_ - config.obstacle_avoidance.turn_angle_base;
+        std::cout << "[Navigation] Obstacle on right, turn left" << std::endl;
     }
     
     // 限制范围

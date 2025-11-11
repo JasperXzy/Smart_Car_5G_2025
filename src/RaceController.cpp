@@ -216,27 +216,35 @@ void RaceController::stateWaitStart(cv::Mat& frame) {
 void RaceController::stateLineFollow(cv::Mat& frame) {
     auto& config = Config::getInstance();
     
-    // 转灰度
+    // 图像转灰度
     cv::Mat gray;
     cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
     
-    // 查找黑线中心
-    int line_center = image_proc_.findLineCenter(
-        gray, 
-        config.line_tracking.search_start_x,
-        camera_width_ / 2
-    );
+    // 边缘检测生成图
+    cv::Mat binary;
+    cv::threshold(gray, binary, 128, 255, cv::THRESH_BINARY);
     
-    if (line_center > 0) {
-        // 巡线控制
-        navigation_->lineFollowing(
-            line_center, 
-            camera_width_,
-            config.line_tracking.speed.straight
-        );
+    // 逐行精细追踪
+    bool track_ok = image_proc_.tracking(binary, 153, 110);
+    
+    if (track_ok) {
+        // 获取巡线中心点
+        int line_center = image_proc_.getTrackingCenter(3);
         
-        // 绘制中心点
-        image_proc_.drawLineCenter(frame, line_center, config.line_tracking.search_start_x);
+        if (line_center > 0) {
+            // 巡线控制
+            navigation_->lineFollowing(
+                line_center, 
+                camera_width_,
+                config.line_tracking.speed.straight
+            );
+            
+            // 绘制巡线结果
+            image_proc_.drawTrackingLines(frame, true, true, true);
+        }
+    } else {
+        std::cerr << "[RaceController] Tracking failed, stopping" << std::endl;
+        navigation_->stop();
     }
     
     // 检测斑马线
@@ -292,8 +300,80 @@ void RaceController::stateObstacleAvoid(cv::Mat& frame) {
     detector_->getObstacleDetector().detect(frame, obstacles);
     
     if (!obstacles.empty()) {
-        // 避障控制
-        navigation_->obstacleAvoidance(obstacles[0].box, camera_width_);
+        // 获取障碍物信息
+        const auto& obs = obstacles[0];
+        int obs_center_x = obs.box.x + obs.box.width / 2;
+        int obs_top_y = obs.box.y;
+        int obs_bottom_y = obs.box.y + obs.box.height;
+        
+        std::cout << "[RaceController] Obstacle detected - CenterX: " << obs_center_x 
+                  << ", TopY: " << obs_top_y << ", BottomY: " << obs_bottom_y << std::endl;
+        
+        // 图像预处理
+        cv::Mat gray, binary;
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+        cv::threshold(gray, binary, 128, 255, cv::THRESH_BINARY);
+        
+        // 根据障碍物位置绘制连接线
+        cv::Mat binary_with_line = binary.clone();
+        
+        // 先进行一次常规追踪获取左右边界
+        if (image_proc_.tracking(binary, 153, 110)) {
+            const auto& left_line = image_proc_.getLeftLine();
+            const auto& right_line = image_proc_.getRightLine();
+            
+            if (!left_line.empty() && !right_line.empty()) {
+                // 计算左右边界前3个点的平均位置
+                int left_avg = 0, right_avg = 0;
+                for (int i = 0; i < std::min(3, (int)left_line.size()); i++) {
+                    left_avg += left_line[i].x;
+                    right_avg += right_line[i].x;
+                }
+                left_avg /= std::min(3, (int)left_line.size());
+                right_avg /= std::min(3, (int)right_line.size());
+                
+                // 根据障碍物位置决定补线方向
+                if (obs_center_x < camera_width_ / 2) {
+                    // 障碍物在左边，补线到右边
+                    std::cout << "[RaceController] Obstacle on left, draw line to right" << std::endl;
+                    binary_with_line = image_proc_.drawWhiteLine(
+                        binary_with_line,
+                        cv::Point(obs_center_x, obs_bottom_y),
+                        cv::Point(right_avg, 155),
+                        8
+                    );
+                } else {
+                    // 障碍物在右边，补线到左边
+                    std::cout << "[RaceController] Obstacle on right, draw line to left" << std::endl;
+                    binary_with_line = image_proc_.drawWhiteLine(
+                        binary_with_line,
+                        cv::Point(obs_center_x, obs_bottom_y),
+                        cv::Point(left_avg, 155),
+                        8
+                    );
+                }
+            }
+        }
+        
+        // 使用避障模式巡线
+        if (image_proc_.trackingObstacle(binary_with_line, obs_top_y)) {
+            int line_center = image_proc_.getTrackingCenter(3);
+            
+            if (line_center > 0) {
+                // 使用避障速度进行巡线
+                navigation_->lineFollowing(
+                    line_center,
+                    camera_width_,
+                    config.obstacle_avoidance.avoid_speed
+                );
+                
+                // 绘制避障巡线结果
+                image_proc_.drawTrackingLines(frame, true, true, true);
+            }
+        } else {
+            // 直接使用避障控制
+            navigation_->obstacleAvoidance(obs.box, camera_width_);
+        }
         
         obstacle_count_++;
         
@@ -307,7 +387,8 @@ void RaceController::stateObstacleAvoid(cv::Mat& frame) {
             changeState(RaceState::LINE_FOLLOW);
         }
     } else {
-        // 没有检测到障碍物，继续巡线
+        // 未检测到障碍物，继续巡线
+        std::cout << "[RaceController] No obstacle detected, return to line following mode" << std::endl;
         changeState(RaceState::LINE_FOLLOW);
     }
 }
